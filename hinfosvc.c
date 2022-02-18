@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 #include <time.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -77,20 +78,27 @@ double get_cpu_percentage() {
     return cpu_percentage;
 }
 
+void generate_res(char *answer, char *res, char *header) {
+    strcpy(answer, res);
+    strcat(answer, header);
+}
+
 
 int main(int argc, char *argv[]) {
-    char cpu_name[128], hostname[128];
-    char *cpu_name_command = "lscpu | sed -nr '/Model name/ s/.*:\\s*(.*) @ .*/\\1/p'";
-    get_name(cpu_name_command, cpu_name);
-
-    char *host_name_command = "cat /proc/sys/kernel/hostname";
-    get_name(host_name_command, hostname);
-
-    double cpuUsage = get_cpu_percentage();
+    char cpu_name[128], hostname[128], cpu_usage[32];
+    char cpu_name_command[] = "lscpu | sed -nr '/Model name/ s/.*:\\s*(.*) @ .*/\\1/p'";
+    char host_name_command[] = "cat /proc/sys/kernel/hostname";
+    char bad_req[] = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain;\r\n\r\n400: Bad Request";
+    char good_res[] = "HTTP/1.1 200 OK\r\nContent-Type: text/plain;\r\n\r\n";
+    char res[512];
+    char req_hostname[] = "GET /hostname ";
+    char req_load[] = "GET /load ";
+    char req_cpu_name[] = "GET /cpu-name ";
+    int net_socket, client_sock, request, opt = 1;
+    char buffer[1024] = {0};
 
     // create a socket
-    int net_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    int opt = 1;
+    net_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     setsockopt(net_socket, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt));
     
     struct sockaddr_in addr;
@@ -100,12 +108,29 @@ int main(int argc, char *argv[]) {
 
     bind(net_socket, (struct sockaddr*) &addr, sizeof(addr));
     listen(net_socket, 5);
-
-    char msg[6] = "Hello!";
-    int client_sock;
-    client_sock = accept(net_socket, NULL, NULL);
-
-    send(client_sock, msg, sizeof(msg), 0);
     
+    printf("Start...\n");
+
+    while (true) {
+        client_sock = accept(net_socket, NULL, NULL);
+        printf("Accepted...\n");
+        request = read(client_sock, buffer, 1024);
+        if (strncmp(buffer, req_hostname, strlen(req_hostname)) == 0) {
+            get_name(host_name_command, hostname);
+            generate_res(res, good_res, hostname);
+            write(client_sock, res, strlen(res));
+        } else if (strncmp(buffer, req_load, strlen(req_load)) == 0) {
+            sprintf(cpu_usage, "%f", get_cpu_percentage());
+            generate_res(res, good_res, cpu_usage);
+            write(client_sock, res, strlen(res));
+        } else if (strncmp(buffer, req_cpu_name, strlen(req_cpu_name)) == 0) {
+            get_name(cpu_name_command, cpu_name);
+            generate_res(res, good_res, cpu_name);
+            write(client_sock, res, strlen(res));
+        } else {
+            write(client_sock, bad_req, strlen(bad_req));
+        }
+        close(client_sock);
+    }
     return 0;
 }
