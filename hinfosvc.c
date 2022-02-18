@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
+#include <math.h>
 #include <time.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -14,17 +14,17 @@
 #include <sys/times.h>
 #include <unistd.h>
 
+int true = 1;
+
 void get_name(char *command, char *str) {
+    // transform terminal command output into string
+    char arr[256];
     FILE *name = popen(command, "r");
     if (name == NULL) {
         fprintf(stderr, "Popen error.");
         exit(EXIT_FAILURE);
     }
-    char arr[512];
-    size_t n;
-    while ((n = fread(arr, 1, sizeof(arr)-1, name)) > 0) {
-        arr[n] = '\0';
-    }
+    fscanf(name, "%[^\n]", arr);
     if (pclose(name) < 0) {
         perror("Pclose error.");
     }
@@ -32,10 +32,12 @@ void get_name(char *command, char *str) {
 }
 
 void get_cpu_details(char *details_s, int *arr) {
+    // transform cpu usage information string into int array
     char details[10][10];
-    int index_ctr = 0, num_index = 0, total_nums = 0;
+    int index_ctr, num_index, total_nums;
+    index_ctr = num_index = total_nums = 0;
 
-    for (index_ctr = 0; index_ctr <= strlen(details_s); index_ctr++) {
+    for (index_ctr = 0; (unsigned) index_ctr <= strlen(details_s); index_ctr++) {
         if (details_s[index_ctr] == ' ' || details_s[index_ctr] == '\n') {
             details[total_nums][num_index] = '\0';
             total_nums++;
@@ -50,7 +52,8 @@ void get_cpu_details(char *details_s, int *arr) {
     }
 }
 
-double get_cpu_percentage() {
+void get_cpu_percentage(char *str) {
+    // count cpu usage percantage from /proc/stat
     char prev_cpu_info[512], post_cpu_info[512];
     int prev_details[10], post_details[10];
     char *cpu_stat_command = "cat /proc/stat | head -n 1 | awk '{ for(i=2; i<NF; i++) {printf(\"%s \", $i)} print $NF}'";
@@ -74,11 +77,13 @@ double get_cpu_percentage() {
     int idle_diff = post_idle - prev_idle;
 
     double cpu_percentage = (double) (sum_diff - idle_diff) / (double) sum_diff;
+    cpu_percentage *= 100.0;
     
-    return cpu_percentage;
+    sprintf(str, "%d%%", (int)round(cpu_percentage));
 }
 
 void generate_res(char *answer, char *res, char *header) {
+    // generate response message
     strcpy(answer, res);
     strcat(answer, header);
 }
@@ -94,11 +99,18 @@ int main(int argc, char *argv[]) {
     char req_hostname[] = "GET /hostname ";
     char req_load[] = "GET /load ";
     char req_cpu_name[] = "GET /cpu-name ";
-    int net_socket, client_sock, request, opt = 1;
+    int net_socket, client_sock, opt = 1;
     char buffer[1024] = {0};
-
+    // check for right usage
+    if (argc != 2) {
+        fprintf(stderr, "Usage: ./hinfosvc PORT\n");
+        return EXIT_FAILURE;
+    }
     // create a socket
-    net_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if ((net_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
+        fprintf(stderr, "Error: socket creation");
+        return EXIT_FAILURE;
+    }
     setsockopt(net_socket, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt));
     
     struct sockaddr_in addr;
@@ -106,28 +118,38 @@ int main(int argc, char *argv[]) {
     addr.sin_port = htons(atoi(argv[1]));
     addr.sin_addr.s_addr = INADDR_ANY;
 
-    bind(net_socket, (struct sockaddr*) &addr, sizeof(addr));
-    listen(net_socket, 5);
-    
-    printf("Start...\n");
-
+    if (bind(net_socket, (struct sockaddr*) &addr, sizeof(addr)) < 0) {
+        fprintf(stderr, "Error: binding name to a socket\n");
+        return EXIT_FAILURE;
+    }
+    if (listen(net_socket, 5) < 0) {
+        fprintf(stderr, "Error: start to listen for socket connections\n");
+        return EXIT_FAILURE;
+    }
+    // start to accepting connections
     while (true) {
         client_sock = accept(net_socket, NULL, NULL);
-        printf("Accepted...\n");
-        request = read(client_sock, buffer, 1024);
+        if (read(client_sock, buffer, 1024) < 0) {
+            fprintf(stderr, "Error: request read");
+            return EXIT_FAILURE;
+        }
         if (strncmp(buffer, req_hostname, strlen(req_hostname)) == 0) {
+            // show hostname
             get_name(host_name_command, hostname);
             generate_res(res, good_res, hostname);
             write(client_sock, res, strlen(res));
         } else if (strncmp(buffer, req_load, strlen(req_load)) == 0) {
-            sprintf(cpu_usage, "%f", get_cpu_percentage());
+            // show cpu load percantage
+            get_cpu_percentage(cpu_usage);
             generate_res(res, good_res, cpu_usage);
             write(client_sock, res, strlen(res));
         } else if (strncmp(buffer, req_cpu_name, strlen(req_cpu_name)) == 0) {
+            // show cpu name
             get_name(cpu_name_command, cpu_name);
             generate_res(res, good_res, cpu_name);
             write(client_sock, res, strlen(res));
         } else {
+            // else bad request 400
             write(client_sock, bad_req, strlen(bad_req));
         }
         close(client_sock);
