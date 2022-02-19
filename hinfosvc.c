@@ -91,7 +91,7 @@ void generate_res(char *answer, char *res, char *header) {
 
 int main(int argc, char *argv[]) {
     char cpu_name[128], hostname[128], cpu_usage[32];
-    char cpu_name_command[] = "lscpu | sed -nr '/Model name/ s/.*:\\s*(.*) @ .*/\\1/p'";
+    char cpu_name_command[] = "cat /proc/cpuinfo | grep "model name" | head -n 1 | sed -n -e 's/^.*: //p'";
     char host_name_command[] = "cat /proc/sys/kernel/hostname";
     char bad_req[] = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain;\r\n\r\n400: Bad Request";
     char good_res[] = "HTTP/1.1 200 OK\r\nContent-Type: text/plain;\r\n\r\n";
