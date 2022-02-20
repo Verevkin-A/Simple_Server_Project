@@ -1,4 +1,4 @@
-// Verevkin Aleksandr VUT/FIT
+// Verevkin Aleksandr(xverev00) VUT/FIT
 // IPK 2021/2022
 // Project #1
 
