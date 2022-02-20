@@ -1,17 +1,14 @@
 // Verevkin Aleksandr VUT/FIT
-// IPK 2022/2023
+// IPK 2021/2022
 // Project #1
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <time.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
-#include <sys/types.h>
 #include <sys/socket.h>
-#include <sys/times.h>
 #include <unistd.h>
 
 int true = 1;
@@ -58,7 +55,7 @@ void get_cpu_percentage(char *str) {
     int prev_details[10], post_details[10];
     char *cpu_stat_command = "cat /proc/stat | head -n 1 | awk '{ for(i=2; i<NF; i++) {printf(\"%s \", $i)} print $NF}'";
     get_name(cpu_stat_command, prev_cpu_info);
-    sleep(1);
+    sleep(1);                                       // get proc stats with 1 sec interval
     get_name(cpu_stat_command, post_cpu_info);
 
     get_cpu_details(prev_cpu_info, prev_details);
@@ -76,9 +73,7 @@ void get_cpu_percentage(char *str) {
     int sum_diff = post_sum - prev_sum;
     int idle_diff = post_idle - prev_idle;
 
-    double cpu_percentage = (double) (sum_diff - idle_diff) / (double) sum_diff;
-    cpu_percentage *= 100.0;
-    
+    double cpu_percentage = 100 * (double) (sum_diff - idle_diff) / (double) sum_diff;
     sprintf(str, "%d%%", (int)round(cpu_percentage));
 }
 
