@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -74,7 +73,7 @@ void get_cpu_percentage(char *str) {
     int idle_diff = post_idle - prev_idle;
 
     double cpu_percentage = 100 * (double) (sum_diff - idle_diff) / (double) sum_diff;
-    sprintf(str, "%d%%", (int)round(cpu_percentage));
+    sprintf(str, "%d%%", (int)(cpu_percentage + 0.5));  // make string from double percentage
 }
 
 void generate_res(char *answer, char *res, char *header) {
